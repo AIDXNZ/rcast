@@ -1,19 +1,24 @@
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
-use std::path::Path;
+
+use std::thread::spawn;
 
 use chromecast::channels::media::{Media, StreamType};
 use chromecast::channels::receiver::CastDeviceApp;
 use chromecast::CastDevice;
 use iced::futures::executor::block_on;
-use iced::widget::{button, column, container, image, pick_list, row, text};
+use iced::futures::io;
+
+use iced::widget::{button, column, container, image, pick_list, row, svg, text};
 use iced::{Alignment, Element, Sandbox, Settings};
 use serde_json::Value;
 use std::fs::read_dir;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use tokio::runtime;
 
 pub fn main() -> iced::Result {
+    spawn(|| upload_imgs()).join().unwrap();
     Counter::run(Settings::default())
 }
 
@@ -35,36 +40,34 @@ enum Message {
     Start,
 }
 
+fn upload_imgs() {
+    use std::process::Command;
+    let output = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["python3", "imageuploader.py"])
+            .output()
+            .expect("failed to execute process")
+    } else {
+        Command::new("python3")
+            .arg("imageuploader.py")
+            .output()
+            .expect("failed to execute process")
+    };
+
+    let hello = output.stdout;
+    println!("{}", String::from_utf8(hello).unwrap());
+}
+
 async fn get_img_urls() -> Vec<String> {
-    let mut paths = Vec::new();
     let mut urls: Vec<String> = Vec::new();
-    for i in read_dir("/home/zdroid/Documents/Programming/rcast/src/images").unwrap() {
-        let path = i.unwrap().path();
-        paths.push(path.clone());
-        let client = reqwest::Client::new();
-        let contents = fs::read(path).unwrap();
-        let mut target = String::new();
-        for c in contents {
-            target.push_str(&c.to_string())
+    let contents = fs::File::open("config/links.txt").unwrap();
+    let lines = BufReader::new(contents).lines();
+    for line in lines {
+        match line {
+            Ok(val) => urls.push(val),
+            Err(_) => {}
         }
-
-        let mut map = HashMap::new();
-        map.insert("key", "6d207e02198a847aa98d0a2a901485a5");
-        map.insert("action", "upload");
-        map.insert("source", &target);
-
-        let post_url =
-            format!("https://freeimage.host/api/1/upload/?key=6d207e02198a847aa98d0a2a901485a5");
-        let mut req = client.post(post_url).form(&map).send().await.unwrap();
-        //Read Response
-        let resp = req.text().await.unwrap();
-        print!("{}", resp);
-        let v: Value = serde_json::from_str(&resp).unwrap();
-        let url = v["image"]["url"].to_string();
-        urls.push(url.clone());
-        println!("{}", url.clone());
     }
-
     return urls;
 }
 
@@ -102,7 +105,12 @@ impl Sandbox for Counter {
             .build()
             .unwrap();
         let urls = rt.block_on(get_img_urls());
-        Self { value: 0,halfmin: 0,secs: 0, urls }
+        Self {
+            value: 0,
+            halfmin: 0,
+            secs: 0,
+            urls,
+        }
     }
 
     fn title(&self) -> String {
@@ -121,36 +129,42 @@ impl Sandbox for Counter {
                 }
             }
             Message::Start => {
-                get_img_urls();
+                upload_imgs();
             }
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
-            },
+            }
             Message::Decrementhalfmin => {
                 if self.halfmin == 0 {
                 } else {
                     self.halfmin -= 1;
                 }
-            },
+            }
             Message::IncrementSec => {
                 self.secs += 1;
-            },
+            }
             Message::DecrementSec => {
                 if self.secs == 0 {
                 } else {
                     self.secs -= 1;
                 }
-            },
+            }
         }
     }
 
     fn view(&self) -> Element<Message> {
         //let path = Path::new("images/");
         container(column![
-            row![text("Coldwell Displays").size(90),].padding(20),
+            row![text("Coldwell Displays").size(90)].padding(20),
             //pick_list(),
             column![
-                text("Intervals").size(40),
+                text("Settings").size(50),
+                text("Images").size(30),
+                column![
+                    row![text(format!("Num of Slides {:?}", self.urls.len())),],
+                    text(format!("Slide preivews: {:?}", self.urls))
+                ].padding(10),
+                text("Intervals").size(30),
                 row![
                     column![
                         text("Minutes"),
@@ -159,7 +173,8 @@ impl Sandbox for Counter {
                             text(self.value).size(30),
                             button("+").on_press(Message::IncrementPressed),
                         ],
-                    ].padding(10),
+                    ]
+                    .padding(10),
                     column![
                         text("1/2 Min"),
                         row![
@@ -167,7 +182,8 @@ impl Sandbox for Counter {
                             text(self.halfmin).size(30),
                             button("+").on_press(Message::Incrementhalfmin),
                         ],
-                    ].padding(10),
+                    ]
+                    .padding(10),
                     column![
                         text("Seconds"),
                         row![
@@ -175,10 +191,12 @@ impl Sandbox for Counter {
                             text(self.secs).size(30),
                             button("+").on_press(Message::IncrementSec),
                         ],
-                    ].padding(10),
-                ].padding(10),
+                    ]
+                    .padding(10),
+                ],
                 button(text("Start Slideshow").size(45)).on_press(Message::Start),
-            ].padding(10),
+            ]
+            .padding(20),
         ])
         .padding(20)
         .into()
