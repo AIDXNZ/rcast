@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::fs;
 
 use std::thread::spawn;
-
 use chromecast::channels::media::{Media, StreamType};
 use chromecast::channels::receiver::CastDeviceApp;
 use chromecast::CastDevice;
@@ -43,8 +42,7 @@ enum Message {
 fn upload_imgs() {
     use std::process::Command;
     let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["python3", "imageuploader.py"])
+        Command::new("cmd").arg("cd").arg("\\dist").arg("imageuploader.exe")
             .output()
             .expect("failed to execute process")
     } else {

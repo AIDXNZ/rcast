@@ -31,4 +31,4 @@ def img_paths():
 urls = img_paths()
 with open("config/links.txt", "w") as outfile:
     for url in urls:
-        outfile.write(url)
+        outfile.write(url+'\n')
