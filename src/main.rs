@@ -1,20 +1,12 @@
-use std::collections::HashMap;
-use std::fs;
-
-use std::thread::spawn;
 use chromecast::channels::media::{Media, StreamType};
 use chromecast::channels::receiver::CastDeviceApp;
 use chromecast::CastDevice;
-use iced::futures::executor::block_on;
-use iced::futures::io;
-
-use iced::widget::{button, column, container, image, pick_list, row, svg, text};
-use iced::{Alignment, Element, Sandbox, Settings};
-use serde_json::Value;
-use std::fs::read_dir;
-use std::fs::File;
+use iced::widget::{button, column, container, row, text};
+use iced::{Element, Sandbox, Settings};
+use std::time::Duration;
+use std::{fs, time, thread};
 use std::io::{BufRead, BufReader};
-use tokio::runtime;
+use std::thread::spawn;
 
 pub fn main() -> iced::Result {
     spawn(|| upload_imgs()).join().unwrap();
@@ -42,7 +34,10 @@ enum Message {
 fn upload_imgs() {
     use std::process::Command;
     let output = if cfg!(target_os = "windows") {
-        Command::new("cmd").arg("cd").arg("\\dist").arg("imageuploader.exe")
+        Command::new("cmd")
+            .arg("cd")
+            .arg("\\dist")
+            .arg("imageuploader.exe")
             .output()
             .expect("failed to execute process")
     } else {
@@ -56,7 +51,7 @@ fn upload_imgs() {
     println!("{}", String::from_utf8(hello).unwrap());
 }
 
-async fn get_img_urls() -> Vec<String> {
+fn get_img_urls() -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
     let contents = fs::File::open("config/links.txt").unwrap();
     let lines = BufReader::new(contents).lines();
@@ -69,40 +64,54 @@ async fn get_img_urls() -> Vec<String> {
     return urls;
 }
 
-fn start_slideshow() {
-    let device = CastDevice::connect("192.168.1.2", 8009).unwrap();
-    let guess = mime_guess::from_path("some.png");
+fn start_slideshow(dur: i32) {
+    let mut urls: Vec<String> = Vec::new();
+    let contents = fs::File::open("config/address.txt").unwrap();
+    let lines = BufReader::new(contents).lines();
+    for line in lines {
+        match line {
+            Ok(val) => urls.push(val),
+            Err(_) => {}
+        }
+    }
 
-    let rec = device
-        .receiver
-        .launch_app(&CastDeviceApp::DefaultMediaReceiver)
-        .unwrap();
-    let session_id = rec.session_id;
-    device
-        .media
-        .load(
-            "destination",
-            &session_id,
-            &Media {
-                content_id: "id".to_string(),
-                stream_type: StreamType::None,
-                content_type: format!("{:?}", guess),
-                metadata: None,
-                duration: None,
-            },
-        )
-        .unwrap();
+    let links = get_img_urls();
+
+    for link in links {
+        let guess = mime_guess::from_path(link.clone());
+
+        for dev in urls.clone() {
+            let device = CastDevice::connect(dev, 8009).unwrap();
+            let rec = device
+                .receiver
+                .launch_app(&CastDeviceApp::DefaultMediaReceiver)
+                .unwrap();
+            let session_id = rec.session_id;
+            device
+                .media
+                .load(
+                    link.clone(),
+                    session_id,
+                    &Media {
+                        content_id: link.clone(),
+                        stream_type: StreamType::None,
+                        content_type: format!("{:?}", guess),
+                        metadata: None,
+                        duration: None,
+                    },
+                )
+                .unwrap();
+        }
+        //Wait for intervals
+        std::thread::sleep(Duration::new(dur as u64, 0));
+    }
 }
 
 impl Sandbox for Counter {
     type Message = Message;
 
     fn new() -> Self {
-        let rt = runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let urls = rt.block_on(get_img_urls());
+        let urls = get_img_urls();
         Self {
             value: 0,
             halfmin: 0,
@@ -127,7 +136,13 @@ impl Sandbox for Counter {
                 }
             }
             Message::Start => {
-                upload_imgs();
+                let min = self.value.clone() * 60;
+                let half_min = self.halfmin.clone() * 30;
+                let seconds = self.secs.clone();
+                let dur = min + half_min + seconds;
+                thread::spawn(move|| {
+                    start_slideshow(dur.clone());
+                });
             }
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
@@ -161,7 +176,8 @@ impl Sandbox for Counter {
                 column![
                     row![text(format!("Num of Slides {:?}", self.urls.len())),],
                     text(format!("Slide preivews: {:?}", self.urls))
-                ].padding(10),
+                ]
+                .padding(10),
                 text("Intervals").size(30),
                 row![
                     column![
@@ -199,4 +215,5 @@ impl Sandbox for Counter {
         .padding(20)
         .into()
     }
+
 }
