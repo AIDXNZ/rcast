@@ -18,6 +18,7 @@ struct Counter {
     halfmin: i32,
     secs: i32,
     urls: Vec<String>,
+    status: String
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,6 +30,7 @@ enum Message {
     IncrementSec,
     DecrementSec,
     Start,
+    Stop
 }
 
 fn upload_imgs() {
@@ -41,7 +43,8 @@ fn upload_imgs() {
             .output()
             .expect("failed to execute process")
     } else {
-        Command::new("python3")
+        Command::new("sh")
+            .arg("python3")
             .arg("imageuploader.py")
             .output()
             .expect("failed to execute process")
@@ -62,6 +65,38 @@ fn get_img_urls() -> Vec<String> {
         }
     }
     return urls;
+}
+
+fn stop() {
+    let mut urls: Vec<String> = Vec::new();
+    let contents = fs::File::open("config/address.txt").unwrap();
+    let lines = BufReader::new(contents).lines();
+    for line in lines {
+        match line {
+            Ok(val) => urls.push(val),
+            Err(_) => {}
+        }
+    }
+    for dev in urls.clone() {
+        let link = "".to_string();
+        let guess = mime_guess::from_path(link.clone());
+        let device = CastDevice::connect(dev.clone(), 8009).unwrap();
+            let rec = device
+                .receiver
+                .launch_app(&CastDeviceApp::DefaultMediaReceiver)
+                .unwrap();
+            let session_id = rec.session_id;
+            device
+                .media
+                .load(link.clone(), session_id, &Media {
+                    content_id: link.clone(),
+                    stream_type: StreamType::None,
+                    content_type: format!("{:?}", guess),
+                    metadata: None,
+                    duration: None,
+                },)
+                .unwrap();
+    }
 }
 
 fn start_slideshow(dur: i32) {
@@ -117,6 +152,7 @@ impl Sandbox for Counter {
             halfmin: 0,
             secs: 0,
             urls,
+            status: "Not Running".to_string(),
         }
     }
 
@@ -143,6 +179,10 @@ impl Sandbox for Counter {
                 thread::spawn(move|| {
                     start_slideshow(dur.clone());
                 });
+                self.status = "Running".to_string();
+            }
+            Message::Stop => {
+
             }
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
@@ -172,10 +212,13 @@ impl Sandbox for Counter {
             //pick_list(),
             column![
                 text("Settings").size(50),
+                text("Status").size(30),
+                column![
+                    row![text(format!("{:?}", self.status)),],
+                ],
                 text("Images").size(30),
                 column![
                     row![text(format!("Num of Slides {:?}", self.urls.len())),],
-                    text(format!("Slide preivews: {:?}", self.urls))
                 ]
                 .padding(10),
                 text("Intervals").size(30),
