@@ -19,7 +19,13 @@ def img_paths():
             image = Image.open(os.getcwd()+"/config/images/"+f)
             buf = io.BytesIO()
             new_image = image.rotate(90)
-            new_image.save(buf, format('JPEG'))
+            guess = mimetypes.guess_type(f)
+            print(guess[0])
+            if guess[0] == 'image/png':
+                new_image.save(buf, format('PNG'))
+            else:
+                new_image.save(buf, format('JPEG'))
+
             payload = {'key': '6d207e02198a847aa98d0a2a901485a5','action': 'upload', }
             x = requests.post("https://freeimage.host/api/1/upload", payload, files={"source": buf.getvalue()})
             import json
