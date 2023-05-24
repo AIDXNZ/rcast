@@ -1,15 +1,17 @@
 use chromecast::channels::media::{Media, StreamType};
 use chromecast::channels::receiver::CastDeviceApp;
 use chromecast::CastDevice;
+use iced::futures::executor::block_on;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Sandbox, Settings};
+use tokio::task::spawn_blocking;
 use std::time::Duration;
-use std::{fs, time, thread};
+use std::{fs, time, thread, future};
 use std::io::{BufRead, BufReader};
 use std::thread::spawn;
 
 pub fn main() -> iced::Result {
-    spawn(|| upload_imgs()).join().unwrap();
+   // upload_imgs();
     Counter::run(Settings::default())
 }
 
@@ -34,13 +36,14 @@ enum Message {
 }
 
 fn upload_imgs() {
+    //println!("Upload?");
     use std::process::Command;
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
             .arg("cd")
             .arg("\\dist")
             .arg("imageuploader.exe")
-            .output()
+            .output()  
             .expect("failed to execute process")
     } else {
         Command::new("sh")
@@ -50,13 +53,17 @@ fn upload_imgs() {
             .expect("failed to execute process")
     };
 
-    let hello = output.stdout;
-    println!("{}", String::from_utf8(hello).unwrap());
+ 
+    let hello =  output.stdout;
+    
+    print!("{:?}", hello);
+    //print!("Hi");
+    //output.kill().unwrap()
 }
 
 fn get_img_urls() -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
-    let contents = fs::File::open("config/links.txt").unwrap();
+    let contents = fs::File::open("dist/config/links.txt").unwrap();
     let lines = BufReader::new(contents).lines();
     for line in lines {
         match line {
@@ -101,7 +108,7 @@ fn stop() {
 
 fn start_slideshow(dur: i32) {
     let mut urls: Vec<String> = Vec::new();
-    let contents = fs::File::open("config/address.txt").unwrap();
+    let contents = fs::File::open("dist/config/address.txt").unwrap();
     let lines = BufReader::new(contents).lines();
     for line in lines {
         match line {

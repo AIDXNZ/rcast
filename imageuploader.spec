@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['C:\\Users\\asmai\\Documents\\Programming\\rcast\\imageuploader.py'],
+    ['C:\\Users\\asmai\\Documents\\Programming\\rcast\\dist\\imageuploader.py'],
     pathex=[],
     binaries=[],
     datas=[],
