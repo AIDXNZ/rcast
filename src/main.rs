@@ -4,14 +4,15 @@ use chromecast::CastDevice;
 use iced::futures::executor::block_on;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Sandbox, Settings};
-use tokio::task::spawn_blocking;
-use std::time::Duration;
-use std::{fs, time, thread, future};
 use std::io::{BufRead, BufReader};
+use std::process::Command;
 use std::thread::spawn;
+use std::time::Duration;
+use std::{fs, future, thread, time};
+use tokio::task::spawn_blocking;
 
 pub fn main() -> iced::Result {
-   // upload_imgs();
+    //upload_imgs();
     Counter::run(Settings::default())
 }
 
@@ -20,7 +21,7 @@ struct Counter {
     halfmin: i32,
     secs: i32,
     urls: Vec<String>,
-    status: String
+    status: String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -32,7 +33,7 @@ enum Message {
     IncrementSec,
     DecrementSec,
     Start,
-    Stop
+    Stop,
 }
 
 fn upload_imgs() {
@@ -43,7 +44,7 @@ fn upload_imgs() {
             .arg("cd")
             .arg("\\dist")
             .arg("imageuploader.exe")
-            .output()  
+            .output()
             .expect("failed to execute process")
     } else {
         Command::new("sh")
@@ -53,9 +54,8 @@ fn upload_imgs() {
             .expect("failed to execute process")
     };
 
- 
-    let hello =  output.stdout;
-    
+    let hello = output.stdout;
+
     print!("{:?}", hello);
     //print!("Hi");
     //output.kill().unwrap()
@@ -75,8 +75,8 @@ fn get_img_urls() -> Vec<String> {
 }
 
 fn stop() {
-    let mut urls: Vec<String> = Vec::new();
-    let contents = fs::File::open("config/address.txt").unwrap();
+     let mut urls: Vec<String> = Vec::new();
+    let contents = fs::File::open("dist/config/address.txt").unwrap();
     let lines = BufReader::new(contents).lines();
     for line in lines {
         match line {
@@ -84,29 +84,17 @@ fn stop() {
             Err(_) => {}
         }
     }
-    for dev in urls.clone() {
-        let link = "".to_string();
-        let guess = mime_guess::from_path(link.clone());
-        let device = CastDevice::connect(dev.clone(), 8009).unwrap();
-            let rec = device
-                .receiver
-                .launch_app(&CastDeviceApp::DefaultMediaReceiver)
-                .unwrap();
-            let session_id = rec.session_id;
-            device
-                .media
-                .load(link.clone(), session_id, &Media {
-                    content_id: link.clone(),
-                    stream_type: StreamType::None,
-                    content_type: format!("{:?}", guess),
-                    metadata: None,
-                    duration: None,
-                },)
-                .unwrap();
+    for url in urls {
+        Command::new(".\\rust_caster.exe")
+        .args(["-a", &url.to_string(), "--stop-current"])
+        .spawn()
+        .expect("Could not stop Application");
     }
+    
 }
 
 fn start_slideshow(dur: i32) {
+    //stop();
     let mut urls: Vec<String> = Vec::new();
     let contents = fs::File::open("dist/config/address.txt").unwrap();
     let lines = BufReader::new(contents).lines();
@@ -119,34 +107,23 @@ fn start_slideshow(dur: i32) {
 
     let links = get_img_urls();
 
-    for link in links {
+        for link in links.clone() {
         let guess = mime_guess::from_path(link.clone());
 
         for dev in urls.clone() {
-            let device = CastDevice::connect(dev, 8009).unwrap();
-            let rec = device
-                .receiver
-                .launch_app(&CastDeviceApp::DefaultMediaReceiver)
-                .unwrap();
-            let session_id = rec.session_id;
-            device
-                .media
-                .load(
-                    link.clone(),
-                    session_id,
-                    &Media {
-                        content_id: link.clone(),
-                        stream_type: StreamType::None,
-                        content_type: format!("{:?}", guess),
-                        metadata: None,
-                        duration: None,
-                    },
-                )
-                .unwrap();
+            //print!("{}", dev.clone());
+            use std::process::Command;
+            Command::new(".\\rust_caster.exe")
+                .arg("-a")
+                .arg(dev.clone())
+                .arg("-m")
+                .arg(link.clone())
+                .spawn()
+                .expect("failed to execute process");
         }
-        //Wait for intervals
-        std::thread::sleep(Duration::new(dur as u64, 0));
+        std::thread::sleep(time::Duration::from_secs(dur as u64));
     }
+
 }
 
 impl Sandbox for Counter {
@@ -183,14 +160,13 @@ impl Sandbox for Counter {
                 let half_min = self.halfmin.clone() * 30;
                 let seconds = self.secs.clone();
                 let dur = min + half_min + seconds;
-                thread::spawn(move|| {
-                    start_slideshow(dur.clone());
-                });
+
+                
+                    start_slideshow(dur);    
+                
                 self.status = "Running".to_string();
             }
-            Message::Stop => {
-
-            }
+            Message::Stop => stop(),
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
             }
@@ -220,14 +196,9 @@ impl Sandbox for Counter {
             column![
                 text("Settings").size(50),
                 text("Status").size(30),
-                column![
-                    row![text(format!("{:?}", self.status)),],
-                ],
+                column![row![text(format!("{:?}", self.status)),],],
                 text("Images").size(30),
-                column![
-                    row![text(format!("Num of Slides {:?}", self.urls.len())),],
-                ]
-                .padding(10),
+                column![row![text(format!("Num of Slides {:?}", self.urls.len())),],].padding(10),
                 text("Intervals").size(30),
                 row![
                     column![
@@ -259,11 +230,11 @@ impl Sandbox for Counter {
                     .padding(10),
                 ],
                 button(text("Start Slideshow").size(45)).on_press(Message::Start),
+                button(text("Stop").size(25)).on_press(Message::Stop)
             ]
             .padding(20),
         ])
         .padding(20)
         .into()
     }
-
 }
