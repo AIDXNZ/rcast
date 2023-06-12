@@ -1,11 +1,13 @@
 use chromecast::channels::media::{Media, StreamType};
 use chromecast::channels::receiver::CastDeviceApp;
 use chromecast::CastDevice;
+use crossbeam_channel::unbounded;
 use iced::futures::executor::block_on;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Sandbox, Settings};
 use std::io::{BufRead, BufReader};
 use std::process::Command;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::spawn;
 use std::time::Duration;
 use std::{fs, future, thread, time};
@@ -22,6 +24,7 @@ struct Counter {
     secs: i32,
     urls: Vec<String>,
     status: String,
+    sender: crossbeam_channel::Sender<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,7 +78,7 @@ fn get_img_urls() -> Vec<String> {
 }
 
 fn stop() {
-     let mut urls: Vec<String> = Vec::new();
+    let mut urls: Vec<String> = Vec::new();
     let contents = fs::File::open("dist/config/address.txt").unwrap();
     let lines = BufReader::new(contents).lines();
     for line in lines {
@@ -86,15 +89,63 @@ fn stop() {
     }
     for url in urls {
         Command::new(".\\rust_caster.exe")
-        .args(["-a", &url.to_string(), "--stop-current"])
-        .spawn()
-        .expect("Could not stop Application");
+            .args(["-a", &url.to_string(), "--stop-current"])
+            .spawn()
+            .expect("Could not stop Application");
     }
-    
+}
+
+fn start_worker(r: crossbeam_channel::Receiver<String>) {
+    thread::spawn(move || loop {
+        let v: Vec<_> = r.try_iter().collect();
+
+        match v.iter().next() {
+            Some(s) => {
+                println!("{}", s);
+                if s == "STOP" {
+                    stop()
+
+
+                } else if s.parse::<i32>().is_ok() {
+                    let mut urls: Vec<String> = Vec::new();
+                    let contents = fs::File::open("dist/config/address.txt").unwrap();
+                    let lines = BufReader::new(contents).lines();
+                    for line in lines {
+                        match line {
+                            Ok(val) => urls.push(val),
+                            Err(_) => {}
+                        }
+                    }
+
+                    let links = get_img_urls();
+
+                    for link in links.clone() {
+                        let guess = mime_guess::from_path(link.clone());
+
+                        for dev in urls.clone() {
+                            //print!("{}", dev.clone());
+                            use std::process::Command;
+                            Command::new(".\\rust_caster.exe")
+                                .arg("-a")
+                                .arg(dev.clone())
+                                .arg("-m")
+                                .arg(link.clone())
+                                .spawn()
+                                .expect("failed to execute process");
+                        }
+                        std::thread::sleep(time::Duration::from_secs(s.parse::<u64>().unwrap()));
+                    }
+                }
+            }
+            None => {}
+        }
+    });
 }
 
 fn start_slideshow(dur: i32) {
     //stop();
+
+    stop();
     let mut urls: Vec<String> = Vec::new();
     let contents = fs::File::open("dist/config/address.txt").unwrap();
     let lines = BufReader::new(contents).lines();
@@ -107,7 +158,7 @@ fn start_slideshow(dur: i32) {
 
     let links = get_img_urls();
 
-        for link in links.clone() {
+    for link in links.clone() {
         let guess = mime_guess::from_path(link.clone());
 
         for dev in urls.clone() {
@@ -123,7 +174,6 @@ fn start_slideshow(dur: i32) {
         }
         std::thread::sleep(time::Duration::from_secs(dur as u64));
     }
-
 }
 
 impl Sandbox for Counter {
@@ -131,12 +181,15 @@ impl Sandbox for Counter {
 
     fn new() -> Self {
         let urls = get_img_urls();
+        let (s, r) = unbounded();
+        start_worker(r);
         Self {
             value: 0,
             halfmin: 0,
             secs: 0,
             urls,
             status: "Not Running".to_string(),
+            sender: s,
         }
     }
 
@@ -161,12 +214,13 @@ impl Sandbox for Counter {
                 let seconds = self.secs.clone();
                 let dur = min + half_min + seconds;
 
-                
-                    start_slideshow(dur);    
-                
+                self.sender.send(dur.to_string()).unwrap();
+
                 self.status = "Running".to_string();
             }
-            Message::Stop => stop(),
+            Message::Stop => {
+                self.sender.send("STOP".to_string()).unwrap();
+            },
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
             }

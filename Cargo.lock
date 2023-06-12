@@ -3091,6 +3091,7 @@ dependencies = [
  "cargo-watch",
  "chromecast",
  "cosmic",
+ "crossbeam-channel",
  "iced",
  "mime_guess",
  "reqwest",
