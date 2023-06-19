@@ -37,6 +37,7 @@ enum Message {
     DecrementSec,
     Start,
     Stop,
+    Upload,
 }
 
 fn upload_imgs() {
@@ -57,11 +58,7 @@ fn upload_imgs() {
             .expect("failed to execute process")
     };
 
-    let hello = output.stdout;
-
-    print!("{:?}", hello);
-    //print!("Hi");
-    //output.kill().unwrap()
+    
 }
 
 fn get_img_urls() -> Vec<String> {
@@ -104,8 +101,8 @@ fn start_worker(r: crossbeam_channel::Receiver<String>) {
                 println!("{}", s);
                 if s == "STOP" {
                     stop()
-
-
+                } else if s == "UPLOAD" {
+                    upload_imgs()
                 } else if s.parse::<i32>().is_ok() {
                     let mut urls: Vec<String> = Vec::new();
                     let contents = fs::File::open("dist/config/address.txt").unwrap();
@@ -220,6 +217,7 @@ impl Sandbox for Counter {
             }
             Message::Stop => {
                 self.sender.send("STOP".to_string()).unwrap();
+                self.status = "Stopped".to_string();
             },
             Message::Incrementhalfmin => {
                 self.halfmin += 1;
@@ -238,6 +236,9 @@ impl Sandbox for Counter {
                 } else {
                     self.secs -= 1;
                 }
+            }
+            Message::Upload => {
+                self.sender.send("Upload".to_string()).unwrap();
             }
         }
     }
@@ -283,8 +284,9 @@ impl Sandbox for Counter {
                     ]
                     .padding(10),
                 ],
-                button(text("Start Slideshow").size(45)).on_press(Message::Start),
-                button(text("Stop").size(25)).on_press(Message::Stop)
+                row![button(text("Stop").size(25)).on_press(Message::Stop)].padding(5),
+                row![button(text("Upload").size(25)).on_press(Message::Upload)].padding(5),
+                row![button(text("Start Slideshow").size(45)).on_press(Message::Start)].padding(5),
             ]
             .padding(20),
         ])
