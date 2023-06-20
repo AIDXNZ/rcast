@@ -52,12 +52,13 @@ def img_paths():
     
     image_paths = []
     image_links = []
-    for r, d, fs in os.walk(os.getcwd() + "/config/images"):
+    for r, d, fs in os.walk(os.getcwd() + "\dist\config\images"):
         for f in fs:
+            print(f)
             _p = os.path.join(r, f)
-            _f = _p.replace(os.getcwd() + "/config/images", '').lstrip('/')
+            _f = _p.replace(os.getcwd() + "\config\images", '').lstrip('\\')
             image_paths.append(os.path.join('images', _f))
-            image = Image.open(os.getcwd()+"/config/images/"+f)
+            image = Image.open(r.replace("\\", "/")+"/"+f)
             new_image = image.rotate(90, expand=True)
             new_image = new_image.convert('RGB')
             guess, _ = mimetypes.guess_type(f)
@@ -85,7 +86,8 @@ def img_paths():
     return image_links
 
 urls = img_paths()
-with open("config/links.txt", "w") as outfile:
+print(os.getcwd()+ "\config\links.txt")
+with open(os.getcwd() + "/dist/config/links.txt", "w") as outfile:
     for url in urls:
         outfile.write(url+'\n')
 

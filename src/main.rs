@@ -14,7 +14,7 @@ use std::{fs, future, thread, time};
 use tokio::task::spawn_blocking;
 
 pub fn main() -> iced::Result {
-    //upload_imgs();
+    upload_imgs();
     Counter::run(Settings::default())
 }
 
@@ -43,22 +43,14 @@ enum Message {
 fn upload_imgs() {
     //println!("Upload?");
     use std::process::Command;
-    let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .arg("cd")
-            .arg("\\dist")
-            .arg("imageuploader.exe")
-            .output()
-            .expect("failed to execute process")
-    } else {
-        Command::new("sh")
-            .arg("python3")
-            .arg("imageuploader.py")
-            .output()
+let mut output = {
+        Command::new(".\\imageuploader.exe")
+            
+            .spawn()
             .expect("failed to execute process")
     };
-
-    
+    output.try_wait().unwrap();         
+    //println!("{:?}", String::from_utf8_lossy(&output.stdout));
 }
 
 fn get_img_urls() -> Vec<String> {

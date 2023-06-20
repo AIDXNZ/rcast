@@ -1,3 +1,2 @@
-START dist\imageuploader.exe
+START imageuploader.exe
 
-START rcast.exe
